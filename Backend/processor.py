@@ -3,74 +3,145 @@ import torch
 import noisereduce as nr
 from faster_whisper import WhisperModel
 
+from services import (
+    SpeakerDiarizer,
+    clean_transcript_text,
+    guess_text_language,
+    load_audio,
+    normalize_audio_for_file,
+    normalize_peak,
+    segments_from_word_timestamps,
+)
+
+
 class SpeechProcessor:
-    def __init__(self, model_size="Systran/faster-distil-whisper-large-v3"):
-        # Tối ưu cho i7 Gen 11: 8 threads, compute int8
+    def __init__(self, model_size="large-v3"):
         self.model = WhisperModel(
-            model_size, 
-            device="cpu", 
-            compute_type="int8", 
-            cpu_threads=8
+            model_size,
+            device="cpu",
+            compute_type="int8",
+            cpu_threads=8,
         )
-        self.last_text = "" # Lưu câu trước ở đây
-        
-        # Load VAD để lọc im lặng
+        self.last_text = ""
+        self.diarizer = SpeakerDiarizer()
+
         self.vad_model, utils = torch.hub.load(
-            repo_or_dir='snakers4/silero-vad', 
-            model='silero_vad',
-            trust_repo=True
+            repo_or_dir="snakers4/silero-vad",
+            model="silero_vad",
+            trust_repo=True,
         )
         (self.get_speech_timestamps, _, _, _, _) = utils
 
     def is_speech(self, audio_data, threshold=0.35):
-        # Chuẩn hóa âm lượng
-        max_val = np.max(np.abs(audio_data))
-        if max_val > 0:
-            audio_data = audio_data / max_val
-            
-        audio_tensor = torch.from_numpy(audio_data).float()
+        audio_tensor = torch.from_numpy(normalize_peak(audio_data)).float()
         speech_timestamps = self.get_speech_timestamps(
             audio_tensor, self.vad_model, sampling_rate=16000, threshold=threshold
         )
         return len(speech_timestamps) > 0
 
     def transcribe(self, audio_data):
-        # 1. Lọc nhiễu kỹ thuật số
         audio_clean = nr.reduce_noise(y=audio_data, sr=16000, prop_decrease=0.8)
-        
-        # 2. Nhận diện kèm timestamps
-        # Initial prompt giúp định hướng phụ đề tiếng Việt chuẩn xác
-        prompt = "Phụ đề tiếng Việt cho người khiếm thính, nội dung chính xác, đầy đủ dấu."
-        
+        prompt = "Phụ đề tiếng Việt chuẩn. Giữ nguyên từ/cụm tiếng Anh xuất hiện trong lời nói. Không dịch."
+
         segments, _ = self.model.transcribe(
-            audio_clean, 
-            language="vi", 
-            beam_size=2, 
+            audio_clean,
+            task="transcribe",
+            language="vi",
+            beam_size=2,
             initial_prompt=prompt,
-            word_timestamps=True, # Quan trọng để làm phụ đề
-            no_speech_threshold=0.6, 
-            condition_on_previous_text=True,
-            log_prob_threshold=-1.0
+            word_timestamps=True,
+            no_speech_threshold=0.6,
+            condition_on_previous_text=False,
+            log_prob_threshold=-1.0,
         )
-        full_text =""
+
+        full_text = ""
         results = []
         for segment in segments:
             full_text += segment.text
-            results.append({
-                "start": round(segment.start, 2),
-                "end": round(segment.end, 2),
-                "text": segment.text.strip()
-            })
+            results.append(
+                {
+                    "start": round(segment.start, 2),
+                    "end": round(segment.end, 2),
+                    "text": segment.text.strip(),
+                }
+            )
+
         self.last_text = full_text[-100:]
         return results
+
+    def transcribe_file_with_speakers(self, file_path, num_speakers=None):
+        audio_data, sample_rate = load_audio(file_path, target_sr=16000)
+        audio_data = normalize_audio_for_file(audio_data, sample_rate=sample_rate, noise_decrease=0.5)
+
+        prompt = "Tạo phụ đề chính xác theo lời nói gốc. Ưu tiên tiếng Việt, giữ nguyên các từ/câu tiếng Anh, không dịch nội dung."
+        segments, info = self.model.transcribe(
+            audio_data,
+            task="transcribe",
+            language="vi",
+            beam_size=5,
+            best_of=5,
+            initial_prompt=prompt,
+            vad_filter=True,
+            vad_parameters={"min_silence_duration_ms": 300, "speech_pad_ms": 200},
+            word_timestamps=True,
+            condition_on_previous_text=False,
+            no_speech_threshold=0.7,
+            log_prob_threshold=-1.2,
+            temperature=0,
+        )
+
+        detected_language = getattr(info, "language", "unknown")
+        results = segments_from_word_timestamps(segments, detected_language, guess_text_language)
+
+        diarized = self.diarizer.assign_speakers(
+            segments=results,
+            audio_data=audio_data,
+            sample_rate=sample_rate,
+            num_speakers=num_speakers,
+        )
+
+        return self.diarizer.smooth_speaker_labels(diarized)
+
+    def transcribe_file_basic(self, file_path):
+        audio_data, _ = load_audio(file_path, target_sr=16000)
+        audio_data = normalize_audio_for_file(audio_data, sample_rate=16000, noise_decrease=0.5)
+        prompt = "Tạo phụ đề chính xác theo lời nói gốc. Ưu tiên tiếng Việt, giữ nguyên các từ/câu tiếng Anh, không dịch nội dung."
+
+        segments, info = self.model.transcribe(
+            audio_data,
+            task="transcribe",
+            language="vi",
+            beam_size=5,
+            best_of=5,
+            initial_prompt=prompt,
+            vad_filter=True,
+            vad_parameters={"min_silence_duration_ms": 300, "speech_pad_ms": 200},
+            word_timestamps=False,
+            condition_on_previous_text=False,
+            no_speech_threshold=0.7,
+            log_prob_threshold=-1.2,
+            temperature=0,
+        )
+
+        results = []
+        for segment in segments:
+            text = (segment.text or "").strip()
+            if not text:
+                continue
+            results.append(
+                {
+                    "start": round(segment.start, 2),
+                    "end": round(segment.end, 2),
+                    "text": text,
+                    "language": guess_text_language(text),
+                    "detected_language": getattr(info, "language", "unknown"),
+                    "speaker_id": 0,
+                    "speaker": "Người nói 1",
+                }
+            )
+
+        return results
+
     def clean_text(self, current_text):
-    # Loại bỏ các ký tự lạ hoặc các câu ảo giác (hallucinations)
-        hallucinations = ["Cảm ơn", "Thank you", "Hãy đăng ký", "Vietsub bởi"]
-        for h in hallucinations:
-            if h in current_text and len(current_text) < len(h) + 5:
-                return ""
-                
-        # Xử lý dấu câu lộn xộn ở đầu câu
-        current_text = current_text.lstrip(".,!?- ")
-        
-        return current_text
+        return clean_transcript_text(current_text)

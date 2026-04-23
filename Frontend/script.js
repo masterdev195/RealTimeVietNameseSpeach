@@ -1,67 +1,88 @@
-let socket;
-let audioContext;
-let recorder;
+const fileInput = document.getElementById('audioFile');
+const uploadBtn = document.getElementById('uploadBtn');
+const speakerInput = document.getElementById('numSpeakers');
+const statusBox = document.getElementById('status');
+const resultList = document.getElementById('resultList');
 
-// Xử lý tải video YouTube từ link
-document.getElementById('loadVideo').onclick = () => {
-    const url = document.getElementById('videoUrl').value;
-    const videoId = url.split('v=')[1]?.split('&')[0];
-    if (videoId) {
-        document.getElementById('player').innerHTML = `
-            <iframe width="100%" height="100%" 
-                src="https://www.youtube.com/embed/${videoId}?autoplay=1&mute=0" 
-                frameborder="0" allow="autoplay; encrypted-media" allowfullscreen>
-            </iframe>`;
+function formatTime(seconds) {
+    const sec = Math.max(0, Math.floor(seconds));
+    const mm = String(Math.floor(sec / 60)).padStart(2, '0');
+    const ss = String(sec % 60).padStart(2, '0');
+    return `${mm}:${ss}`;
+}
+
+function setStatus(message, isError = false) {
+    statusBox.textContent = message;
+    statusBox.className = isError
+        ? 'mt-3 text-sm text-red-300'
+        : 'mt-3 text-sm text-emerald-300';
+}
+
+function renderSegments(segments) {
+    resultList.innerHTML = '';
+
+    if (!segments || segments.length === 0) {
+        resultList.innerHTML = '<li class="p-4 rounded-lg bg-zinc-900 border border-zinc-800 text-zinc-400">Không có nội dung nhận diện.</li>';
+        return;
     }
-};
 
-startBtn.onclick = async () => {
-    // 1. Kết nối WebSocket
-    socket = new WebSocket('ws://localhost:8000/ws');
+    segments.forEach((item) => {
+        const row = document.createElement('li');
+        row.className = 'p-4 rounded-xl bg-zinc-900 border border-zinc-800';
 
-    // 2. Lấy âm thanh từ Hệ thống (Tab Audio)
-    // Trình duyệt sẽ hiện bảng chọn: Hãy chọn "Tab này" hoặc "Tab YouTube" và tích vào "Share Audio"
-    const stream = await navigator.mediaDevices.getDisplayMedia({
-        video: true, // Phải để true để hiện bảng chọn, nhưng ta chỉ lấy audio
-        audio: {
-            echoCancellation: true,
-            noiseSuppression: true
-        }
+        const langLabel = item.language && item.language !== 'unknown'
+            ? item.language.toUpperCase()
+            : (item.detected_language || 'AUTO').toUpperCase();
+
+        row.innerHTML = `
+            <div class="flex flex-wrap gap-3 items-center mb-2">
+                <span class="px-3 py-1 rounded-full bg-blue-600/30 text-blue-200 border border-blue-500/40 text-sm font-semibold">${item.speaker || 'Không rõ'}</span>
+                <span class="px-2.5 py-1 rounded-full bg-emerald-600/20 text-emerald-200 border border-emerald-500/40 text-xs font-semibold">${langLabel}</span>
+                <span class="text-xs text-zinc-400">${formatTime(item.start)} - ${formatTime(item.end)}</span>
+            </div>
+            <p class="text-zinc-100 leading-relaxed">${item.text}</p>
+        `;
+
+        resultList.appendChild(row);
     });
+}
 
-    // Chỉ lấy track Audio, dừng track Video để tiết kiệm tài nguyên
-    const audioTrack = stream.getAudioTracks()[0];
-    stream.getVideoTracks()[0].stop(); 
+uploadBtn.addEventListener('click', async () => {
+    const file = fileInput.files[0];
+    if (!file) {
+        setStatus('Vui lòng chọn file âm thanh trước.', true);
+        return;
+    }
 
-    audioContext = new AudioContext({ sampleRate: 16000 });
-    const source = audioContext.createMediaStreamSource(new MediaStream([audioTrack]));
-    
-    recorder = audioContext.createScriptProcessor(4096, 1, 1);
-    recorder.onaudioprocess = (e) => {
-        const inputData = e.inputBuffer.getChannelData(0);
-        const int16Data = new Int16Array(inputData.length);
-        for (let i = 0; i < inputData.length; i++) {
-            int16Data[i] = Math.max(-1, Math.min(1, inputData[i])) * 0x7FFF;
+    uploadBtn.disabled = true;
+    uploadBtn.classList.add('opacity-60', 'cursor-not-allowed');
+    setStatus('Đang tải file và xử lý nhận diện...');
+
+    try {
+        const formData = new FormData();
+        formData.append('audio_file', file);
+
+        const numSpeakers = Number(speakerInput.value || 0);
+        if (Number.isFinite(numSpeakers) && numSpeakers > 0) {
+            formData.append('num_speakers', String(numSpeakers));
         }
-        if (socket.readyState === WebSocket.OPEN) {
-            socket.send(int16Data.buffer);
-        }
-    };
 
-    source.connect(recorder);
-    recorder.connect(audioContext.destination);
-
-    socket.onmessage = (event) => {
-        const data = JSON.parse(event.data);
-        data.forEach(item => {
-            const display = document.getElementById('sub-display');
-            display.innerText = item.text;
-            display.style.opacity = 1;
-            
-            // Tự ẩn sau khi nói xong
-            setTimeout(() => {
-                if (display.innerText === item.text) display.style.opacity = 0;
-            }, 4000);
+        const response = await fetch('http://localhost:8000/transcribe-file', {
+            method: 'POST',
+            body: formData
         });
-    };
-};
+
+        const data = await response.json();
+        if (!response.ok) {
+            throw new Error(data.detail || 'Không thể xử lý file.');
+        }
+
+        renderSegments(data.segments || []);
+        setStatus(`Hoàn tất: ${data.total_segments || 0} đoạn thoại.`);
+    } catch (error) {
+        setStatus(`Lỗi: ${error.message}`, true);
+    } finally {
+        uploadBtn.disabled = false;
+        uploadBtn.classList.remove('opacity-60', 'cursor-not-allowed');
+    }
+});

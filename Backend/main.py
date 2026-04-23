@@ -1,33 +1,83 @@
 import uvicorn
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, UploadFile, File, Form, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 from processor import SpeechProcessor
+from services.language_utils import clean_subtitle
 import numpy as np
 import json
 import asyncio
 import sys
+import os
+import tempfile
+import traceback
 
 app = FastAPI()
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=False,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 print("--- ĐANG KHỞI ĐỘNG HỆ THỐNG PHỤ ĐỀ ---")
 
 try:
     print("1. Đang nạp bộ lọc giọng nói (VAD)...")
-    # Khởi tạo processor - Máy i7 Gen 11 hãy dùng "small" cho an toàn
-    processor = SpeechProcessor(model_size="small") 
+    # Ưu tiên độ chính xác cho bài toán file upload.
+    processor = SpeechProcessor(model_size="large-v3") 
     print("2. Đã nạp xong Model Whisper!")
 except Exception as e:
     print(f"❌ LỖI KHI NẠP MODEL: {e}")
     sys.exit(1)
-def clean_subtitle(text):
-    if not text: return ""
-    # Viết hoa chữ cái đầu
-    text = text[0].upper() + text[1:]
-    # Loại bỏ khoảng trắng thừa
-    text = " ".join(text.split())
-    # Nếu câu quá ngắn (dưới 3 từ) mà không phải câu chào, thường là rác
-    if len(text.split()) < 3 and text not in ["Chào bạn.", "Cảm ơn."]:
-        return ""
-    return text
+
+
+@app.post("/transcribe-file")
+async def transcribe_file(
+    audio_file: UploadFile = File(...),
+    num_speakers: int = Form(default=0)
+):
+    file_name = audio_file.filename or "audio"
+    extension = os.path.splitext(file_name)[1] or ".wav"
+    tmp_path = None
+
+    try:
+        with tempfile.NamedTemporaryFile(delete=False, suffix=extension) as tmp_file:
+            content = await audio_file.read()
+            if not content:
+                raise HTTPException(status_code=400, detail="File âm thanh trống")
+            tmp_file.write(content)
+            tmp_path = tmp_file.name
+
+        try:
+            results = processor.transcribe_file_with_speakers(
+                file_path=tmp_path,
+                num_speakers=num_speakers if num_speakers > 0 else None
+            )
+            mode = "diarization"
+        except Exception as diarization_error:
+            print(f"⚠️ Diarization lỗi, chuyển sang transcript thường: {diarization_error}")
+            traceback.print_exc()
+            results = processor.transcribe_file_basic(file_path=tmp_path)
+            mode = "transcript-only"
+
+        return {
+            "file_name": file_name,
+            "segments": results,
+            "total_segments": len(results),
+            "mode": mode
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Không thể xử lý file âm thanh: {e}")
+    finally:
+        if tmp_path and os.path.exists(tmp_path):
+            os.remove(tmp_path)
+
+
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
     await websocket.accept()
