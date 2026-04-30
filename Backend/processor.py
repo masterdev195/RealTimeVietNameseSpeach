@@ -4,7 +4,6 @@ import noisereduce as nr
 from faster_whisper import WhisperModel
 
 from services import (
-    SpeakerDiarizer,
     clean_transcript_text,
     guess_text_language,
     load_audio,
@@ -23,8 +22,6 @@ class SpeechProcessor:
             cpu_threads=8,
         )
         self.last_text = ""
-        self.diarizer = SpeakerDiarizer()
-
         self.vad_model, utils = torch.hub.load(
             repo_or_dir="snakers4/silero-vad",
             model="silero_vad",
@@ -70,9 +67,11 @@ class SpeechProcessor:
         self.last_text = full_text[-100:]
         return results
 
-    def transcribe_file_with_speakers(self, file_path, num_speakers=None):
+    def transcribe_file(self, file_path):
         audio_data, sample_rate = load_audio(file_path, target_sr=16000)
         audio_data = normalize_audio_for_file(audio_data, sample_rate=sample_rate, noise_decrease=0.5)
+        duration_sec = len(audio_data) / float(sample_rate)
+        print(f"[Transcribe] audio duration: {duration_sec:.2f}s")
 
         prompt = "Tạo phụ đề chính xác theo lời nói gốc. Ưu tiên tiếng Việt, giữ nguyên các từ/câu tiếng Anh, không dịch nội dung."
         segments, info = self.model.transcribe(
@@ -93,15 +92,9 @@ class SpeechProcessor:
 
         detected_language = getattr(info, "language", "unknown")
         results = segments_from_word_timestamps(segments, detected_language, guess_text_language)
-
-        diarized = self.diarizer.assign_speakers_semantic(
-            segments=results,
-            audio_data=audio_data,
-            sample_rate=sample_rate,
-            num_speakers=num_speakers,
-        )
-
-        return self.diarizer.smooth_speaker_labels(diarized)
+        if results:
+            print(f"[Transcribe] segments: {len(results)}, last end: {results[-1]['end']:.2f}s")
+        return results
 
     def transcribe_file_basic(self, file_path):
         audio_data, _ = load_audio(file_path, target_sr=16000)

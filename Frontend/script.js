@@ -36,7 +36,6 @@ function renderSegments(segments) {
         row.innerHTML = `
             <div class="flex flex-wrap gap-3 items-center mb-2">
                 <span class="px-2.5 py-1 rounded-full bg-emerald-600/20 text-emerald-200 border border-emerald-500/40 text-xs font-semibold">${langLabel}</span>
-                <span class="text-xs text-zinc-400">${formatTime(item.start)} - ${formatTime(item.end)}</span>
             </div>
             <p class="text-zinc-100 leading-relaxed">${item.text}</p>
         `;

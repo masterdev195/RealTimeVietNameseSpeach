@@ -1,3 +1,4 @@
+import os
 import numpy as np
 import noisereduce as nr
 import torchaudio
@@ -7,8 +8,30 @@ try:
 except Exception:
     decode_audio = None
 
+try:
+    import av
+except Exception:
+    av = None
+
 
 def load_audio(file_path, target_sr=16000):
+    extension = os.path.splitext(file_path)[1].lower()
+    prefer_decode = extension in {".mp3", ".m4a", ".aac", ".ogg", ".flac"}
+
+    if av is not None:
+        try:
+            with av.open(file_path, mode="r", metadata_errors="ignore") as container:
+                if container.duration:
+                    duration_sec = float(container.duration) / float(av.time_base)
+                    print(f"[Decode] container duration: {duration_sec:.2f}s")
+        except Exception:
+            pass
+
+    if prefer_decode and decode_audio is not None:
+        audio = decode_audio(file_path, sampling_rate=target_sr)
+        print(f"[Decode] decoded samples: {len(audio)}")
+        return np.asarray(audio, dtype=np.float32), target_sr
+
     try:
         waveform, sample_rate = torchaudio.load(file_path)
         if waveform.shape[0] > 1:

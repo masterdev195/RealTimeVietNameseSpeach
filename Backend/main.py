@@ -1,5 +1,5 @@
 import uvicorn
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect, UploadFile, File, HTTPException
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, UploadFile, File, Form, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 import numpy as np
 import json
@@ -59,9 +59,18 @@ async def transcribe_file(
                 raise HTTPException(status_code=400, detail="File âm thanh trống")
             tmp_file.write(content)
             tmp_path = tmp_file.name
+            print(f"[Upload] filename={file_name}, bytes={len(content)}")
 
-        results = processor.transcribe_file_basic(file_path=tmp_path)
-        mode = "transcript-only"
+        try:
+            if tmp_path and os.path.exists(tmp_path):
+                print(f"[Upload] tmp_size={os.path.getsize(tmp_path)} bytes")
+            results = processor.transcribe_file(file_path=tmp_path)
+            mode = "transcript"
+        except Exception as transcribe_error:
+            print(f"⚠️ Lỗi nhận diện, chuyển sang transcript thường: {transcribe_error}")
+            traceback.print_exc()
+            results = processor.transcribe_file_basic(file_path=tmp_path)
+            mode = "transcript-basic"
 
         return {
             "file_name": file_name,
