@@ -6,9 +6,7 @@ Vietnamese speech-to-text for uploaded audio files. The backend uses FastAPI and
 - Backend: FastAPI + Uvicorn.
 - ASR model: Faster-Whisper (Whisper large-v3) running on CPU with int8.
 - VAD: Silero VAD (snakers4/silero-vad) for speech detection in realtime flow.
-- Optional diarization: pyannote/speaker-diarization-3.1 (requires HF token + gated model access).
-- Speaker embedding (fallback): speechbrain/spkrec-ecapa-voxceleb.
-- Audio IO: torchaudio + soundfile backend.
+- Audio IO: torchaudio + PyAV (via faster-whisper decode).
 
 ## Features
 - Upload audio and get sentence-level transcript output.
@@ -40,16 +38,6 @@ python Backend/main.py
 4) Open frontend
 - Open `Frontend/indec.html` in a browser.
 - Click "Xử lý file" to upload and transcribe.
-
-## Optional: Pyannote diarization
-Speaker diarization is disabled by default. If you want to enable it later, you need a Hugging Face token and to accept gated model terms:
-- Create token: https://huggingface.co/settings/tokens
-- Accept model terms: https://hf.co/pyannote/speaker-diarization-3.1 and https://hf.co/pyannote/segmentation-3.0
-
-Then set the token in your terminal session:
-```powershell
-$env:HF_TOKEN = "hf_xxx_your_token_here"
-```
 
 ## Notes
 - `Frontend/indec.html` is the entry UI.
