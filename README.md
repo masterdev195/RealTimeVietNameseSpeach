@@ -2,6 +2,14 @@
 
 Vietnamese speech-to-text for uploaded audio files. The backend uses FastAPI and Faster-Whisper, and the frontend is a simple HTML page for uploading audio and viewing sentence-level results.
 
+## Tech Stack & Models
+- Backend: FastAPI + Uvicorn.
+- ASR model: Faster-Whisper (Whisper large-v3) running on CPU with int8.
+- VAD: Silero VAD (snakers4/silero-vad) for speech detection in realtime flow.
+- Optional diarization: pyannote/speaker-diarization-3.1 (requires HF token + gated model access).
+- Speaker embedding (fallback): speechbrain/spkrec-ecapa-voxceleb.
+- Audio IO: torchaudio + soundfile backend.
+
 ## Features
 - Upload audio and get sentence-level transcript output.
 - Vietnamese-first transcription, keeps English words as-is.
