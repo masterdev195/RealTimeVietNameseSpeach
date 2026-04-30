@@ -94,7 +94,7 @@ class SpeechProcessor:
         detected_language = getattr(info, "language", "unknown")
         results = segments_from_word_timestamps(segments, detected_language, guess_text_language)
 
-        diarized = self.diarizer.assign_speakers(
+        diarized = self.diarizer.assign_speakers_semantic(
             segments=results,
             audio_data=audio_data,
             sample_rate=sample_rate,

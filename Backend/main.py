@@ -1,8 +1,6 @@
 import uvicorn
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect, UploadFile, File, Form, HTTPException
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, UploadFile, File, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from processor import SpeechProcessor
-from services.language_utils import clean_subtitle
 import numpy as np
 import json
 import asyncio
@@ -10,6 +8,19 @@ import sys
 import os
 import tempfile
 import traceback
+
+try:
+    import torchaudio
+
+    if not hasattr(torchaudio, "list_audio_backends"):
+        torchaudio.list_audio_backends = lambda: ["soundfile"]
+    if not hasattr(torchaudio, "set_audio_backend"):
+        torchaudio.set_audio_backend = lambda _: None
+except Exception:
+    pass
+
+from processor import SpeechProcessor
+from services.language_utils import clean_subtitle
 
 app = FastAPI()
 
@@ -35,8 +46,7 @@ except Exception as e:
 
 @app.post("/transcribe-file")
 async def transcribe_file(
-    audio_file: UploadFile = File(...),
-    num_speakers: int = Form(default=0)
+    audio_file: UploadFile = File(...)
 ):
     file_name = audio_file.filename or "audio"
     extension = os.path.splitext(file_name)[1] or ".wav"
@@ -50,17 +60,8 @@ async def transcribe_file(
             tmp_file.write(content)
             tmp_path = tmp_file.name
 
-        try:
-            results = processor.transcribe_file_with_speakers(
-                file_path=tmp_path,
-                num_speakers=num_speakers if num_speakers > 0 else None
-            )
-            mode = "diarization"
-        except Exception as diarization_error:
-            print(f"⚠️ Diarization lỗi, chuyển sang transcript thường: {diarization_error}")
-            traceback.print_exc()
-            results = processor.transcribe_file_basic(file_path=tmp_path)
-            mode = "transcript-only"
+        results = processor.transcribe_file_basic(file_path=tmp_path)
+        mode = "transcript-only"
 
         return {
             "file_name": file_name,

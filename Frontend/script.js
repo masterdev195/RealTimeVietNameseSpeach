@@ -1,6 +1,5 @@
 const fileInput = document.getElementById('audioFile');
 const uploadBtn = document.getElementById('uploadBtn');
-const speakerInput = document.getElementById('numSpeakers');
 const statusBox = document.getElementById('status');
 const resultList = document.getElementById('resultList');
 
@@ -36,7 +35,6 @@ function renderSegments(segments) {
 
         row.innerHTML = `
             <div class="flex flex-wrap gap-3 items-center mb-2">
-                <span class="px-3 py-1 rounded-full bg-blue-600/30 text-blue-200 border border-blue-500/40 text-sm font-semibold">${item.speaker || 'Không rõ'}</span>
                 <span class="px-2.5 py-1 rounded-full bg-emerald-600/20 text-emerald-200 border border-emerald-500/40 text-xs font-semibold">${langLabel}</span>
                 <span class="text-xs text-zinc-400">${formatTime(item.start)} - ${formatTime(item.end)}</span>
             </div>
@@ -62,11 +60,6 @@ uploadBtn.addEventListener('click', async () => {
         const formData = new FormData();
         formData.append('audio_file', file);
 
-        const numSpeakers = Number(speakerInput.value || 0);
-        if (Number.isFinite(numSpeakers) && numSpeakers > 0) {
-            formData.append('num_speakers', String(numSpeakers));
-        }
-
         const response = await fetch('http://localhost:8000/transcribe-file', {
             method: 'POST',
             body: formData
@@ -77,7 +70,9 @@ uploadBtn.addEventListener('click', async () => {
             throw new Error(data.detail || 'Không thể xử lý file.');
         }
 
-        renderSegments(data.segments || []);
+        const segments = data.segments || [];
+        renderSegments(segments);
+
         setStatus(`Hoàn tất: ${data.total_segments || 0} đoạn thoại.`);
     } catch (error) {
         setStatus(`Lỗi: ${error.message}`, true);

@@ -7,6 +7,7 @@ __pycache__/
 venv/
 .venv/
 env/
+venv311/
 
 # Tool caches
 .pytest_cache/
@@ -22,6 +23,7 @@ env/
 .DS_Store
 Thumbs.db
 .vscode/
+.idea/
 
 # Build/output artifacts
 dist/
@@ -36,3 +38,6 @@ build/
 
 # Model/cache artifacts (large files)
 pretrained_models/spkrec-ecapa-voxceleb/**
+
+# Local caches
+.cache/
