@@ -29,6 +29,41 @@ class SpeechProcessor:
         )
         (self.get_speech_timestamps, _, _, _, _) = utils
 
+    def pick_file_language(self, audio_data, sample_rate):
+        probe_seconds = 30
+        max_samples = int(sample_rate * probe_seconds)
+        probe_audio = audio_data[:max_samples] if max_samples > 0 else audio_data
+
+        detected = None
+        probability = None
+        try:
+            _, info = self.model.transcribe(
+                probe_audio,
+                task="transcribe",
+                beam_size=1,
+                best_of=1,
+                initial_prompt="",
+                vad_filter=False,
+                word_timestamps=False,
+                condition_on_previous_text=False,
+                no_speech_threshold=0.2,
+                log_prob_threshold=-1.2,
+                temperature=0,
+            )
+            detected = getattr(info, "language", None)
+            probability = getattr(info, "language_probability", None)
+        except Exception:
+            detected = None
+            probability = None
+
+        if detected == "vi":
+            return "vi"
+
+        if detected == "en" and (probability is None or probability >= 0.5):
+            return "en"
+
+        return "vi"
+
     def is_speech(self, audio_data, threshold=0.35):
         audio_tensor = torch.from_numpy(normalize_peak(audio_data)).float()
         speech_timestamps = self.get_speech_timestamps(
@@ -47,7 +82,7 @@ class SpeechProcessor:
             beam_size=2,
             initial_prompt=prompt,
             word_timestamps=True,
-            no_speech_threshold=0.6,
+            no_speech_threshold=0.7,
             condition_on_previous_text=False,
             log_prob_threshold=-1.0,
         )
@@ -69,23 +104,26 @@ class SpeechProcessor:
 
     def transcribe_file(self, file_path):
         audio_data, sample_rate = load_audio(file_path, target_sr=16000)
-        audio_data = normalize_audio_for_file(audio_data, sample_rate=sample_rate, noise_decrease=0.5)
+        audio_data = normalize_audio_for_file(audio_data, sample_rate=sample_rate, noise_decrease=0.1)
         duration_sec = len(audio_data) / float(sample_rate)
         print(f"[Transcribe] audio duration: {duration_sec:.2f}s")
+
+        language = self.pick_file_language(audio_data, sample_rate)
+        print(f"[Transcribe] file language: {language}")
 
         prompt = "Tạo phụ đề chính xác theo lời nói gốc. Ưu tiên tiếng Việt, giữ nguyên các từ/câu tiếng Anh, không dịch nội dung."
         segments, info = self.model.transcribe(
             audio_data,
             task="transcribe",
-            language="vi",
+            language=language,
             beam_size=5,
             best_of=5,
             initial_prompt=prompt,
-            vad_filter=True,
+            vad_filter=False,
             vad_parameters={"min_silence_duration_ms": 300, "speech_pad_ms": 200},
             word_timestamps=True,
             condition_on_previous_text=False,
-            no_speech_threshold=0.7,
+            no_speech_threshold=0.2,
             log_prob_threshold=-1.2,
             temperature=0,
         )
@@ -98,21 +136,22 @@ class SpeechProcessor:
 
     def transcribe_file_basic(self, file_path):
         audio_data, _ = load_audio(file_path, target_sr=16000)
-        audio_data = normalize_audio_for_file(audio_data, sample_rate=16000, noise_decrease=0.5)
+        audio_data = normalize_audio_for_file(audio_data, sample_rate=16000, noise_decrease=0.1)
+        language = self.pick_file_language(audio_data, 16000)
         prompt = "Tạo phụ đề chính xác theo lời nói gốc. Ưu tiên tiếng Việt, giữ nguyên các từ/câu tiếng Anh, không dịch nội dung."
 
         segments, info = self.model.transcribe(
             audio_data,
             task="transcribe",
-            language="vi",
+            language=language,
             beam_size=5,
             best_of=5,
             initial_prompt=prompt,
-            vad_filter=True,
+            vad_filter=False,
             vad_parameters={"min_silence_duration_ms": 300, "speech_pad_ms": 200},
             word_timestamps=False,
             condition_on_previous_text=False,
-            no_speech_threshold=0.7,
+            no_speech_threshold=0.2,
             log_prob_threshold=-1.2,
             temperature=0,
         )

@@ -4,43 +4,161 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Chuyển đổi audio sang văn bản</title>
+    <title>Ghibli Speech to Text</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <!-- Font chữ mềm mại phù hợp phong cách hoạt hình -->
+    <link href="https://fonts.googleapis.com/css2?family=Quicksand:wght@400;600;700&display=swap" rel="stylesheet">
     <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        :root {
+            --ghibli-pink: #ffb7c5; /* Hồng anh đào */
+            --ghibli-green-light: #a8e063; /* Xanh lá non */
+            --ghibli-green-dark: #56ab2f; /* Xanh vườn */
+            --ghibli-sky: #e0f7fa;
+        }
+
+        body {
+            font-family: 'Quicksand', sans-serif;
+            background: linear-gradient(180deg, #b9e9ff 0%, #ffdef1 100%);
+            overflow-x: hidden;
+        }
+
+        /* Hiệu ứng đồi cỏ lớp chồng lớp */
+        .hill-container {
+            position: fixed;
+            bottom: 0;
+            width: 100%;
+            height: 250px;
+            z-index: -1;
+        }
+
+        .hill {
+            position: absolute;
+            bottom: -50px;
+            border-radius: 50% 50% 0 0;
+            filter: blur(1px);
+        }
+
+        .hill-1 {
+            width: 120%;
+            height: 300px;
+            left: -10%;
+            background: linear-gradient(to top, #2f9a5a, #7edb9a);
+            z-index: 2;
+        }
+
+        .hill-2 {
+            width: 110%;
+            height: 350px;
+            right: -5%;
+            background: linear-gradient(to top, #56ab2f, #a8e063);
+            opacity: 0.8;
+            z-index: 1;
+        }
+
+        /* Những bông hoa nhỏ lung linh */
+        .flower {
+            position: absolute;
+            width: 12px;
+            height: 12px;
+            background: white;
+            border-radius: 50%;
+            box-shadow: 0 0 10px white;
+            animation: blink 3s infinite ease-in-out;
+        }
+
+        @keyframes blink {
+            0%, 100% { opacity: 0.3; transform: scale(0.8); }
+            50% { opacity: 1; transform: scale(1.2); }
+        }
+
+        /* Style cho card trong suốt kiểu Ghibli */
+        .ghibli-card {
+            background: rgba(255, 255, 255, 0.7);
+            backdrop-filter: blur(10px);
+            border: 2px solid rgba(255, 255, 255, 0.5);
+            box-shadow: 0 15px 35px rgba(255, 183, 197, 0.3);
+        }
+
+        .custom-button {
+            background: linear-gradient(45deg, #ff79b7, #ffb7c5);
+            transition: all 0.3s ease;
+        }
+
+        .custom-button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(255, 121, 183, 0.4);
+        }
+
+        /* Mây trôi lững lờ */
+        .cloud {
+            position: absolute;
+            background: white;
+            border-radius: 100px;
+            opacity: 0.8;
+            animation: float 25s linear infinite;
+        }
+
+        @keyframes float {
+            from { left: -200px; }
+            to { left: 100vw; }
+        }
+    </style>
 </head>
 
-<body class="min-h-screen bg-gradient-to-b from-zinc-950 via-zinc-900 to-zinc-950 text-zinc-100">
-    <main class="max-w-4xl mx-auto p-4 md:p-8">
-        <h1 class="text-2xl md:text-3xl font-bold text-cyan-300 mb-2">Chuyển đổi audio sang văn bản</h1>
-        <p class="text-zinc-400 mb-6">Chọn file âm thanh (mp3, wav, m4a...) và hệ thống sẽ trả về nội dung theo từng
-            câu.</p>
+<body class="min-h-screen p-4 md:p-8">
+    <!-- Nền phong cảnh -->
+    <div class="cloud" style="top: 10%; width: 150px; height: 50px;"></div>
+    <div class="cloud" style="top: 20%; width: 200px; height: 60px; animation-delay: -5s;"></div>
+    
+    <div class="hill-container">
+        <div class="hill hill-1"></div>
+        <div class="hill hill-2"></div>
+        <!-- Những đốm hoa -->
+        <div class="flower" style="bottom: 150px; left: 15%; background: #ff5aa6;"></div>
+        <div class="flower" style="bottom: 120px; left: 45%; background: #fff;"></div>
+        <div class="flower" style="bottom: 180px; left: 80%; background: #ff5aa6;"></div>
+    </div>
 
-        <section class="rounded-2xl border border-zinc-800 bg-zinc-900/70 p-4 md:p-6 shadow-xl">
-            <div class="grid gap-4 items-end">
+    <main class="max-w-4xl mx-auto">
+        <header class="text-center mb-10">
+            <div class="inline-block px-4 py-1 rounded-full bg-white/50 text-[#c83b7c] font-bold text-sm mb-3">
+                ✨ Whisper AI x Ghibli Forest
+            </div>
+            <h1 class="text-4xl md:text-5xl font-bold text-[#2f9a5a] drop-shadow-sm">
+                 GIẢI MÃ ÂM THANH
+            </h1>
+            <p class="mt-3 text-slate-600 font-medium italic">Ghi lại thanh âm của gió và chuyển thành lời nói...</p>
+        </header>
+
+        <section class="ghibli-card rounded-[2rem] p-6 md:p-10 mb-8">
+            <div class="flex flex-col gap-6">
                 <div>
-                    <label for="audioFile" class="block text-sm text-zinc-300 mb-2">File âm thanh</label>
+                    <label class="block text-[#c83b7c] font-bold mb-3 ml-1">Nơi gửi gắm âm thanh của bạn</label>
                     <input id="audioFile" type="file" accept="audio/*"
-                        class="block w-full text-sm text-zinc-200 file:mr-3 file:py-2 file:px-4 file:rounded-lg file:border-0 file:bg-cyan-700 file:text-white hover:file:bg-cyan-600 bg-zinc-950 border border-zinc-800 rounded-lg" />
+                        class="block w-full text-sm text-slate-500 file:mr-4 file:py-3 file:px-6 file:rounded-full file:border-0 file:text-white file:font-bold file:bg-[#7bd389] hover:file:bg-[#2f9a5a] bg-white/50 rounded-full border-2 border-dashed border-[#ffb9da] p-2" />
+                </div>
+
+                <div class="flex justify-center">
+                    <button id="uploadBtn" class="custom-button text-white px-10 py-4 rounded-full font-bold text-lg">
+                        Bắt đầu nhận diện
+                    </button>
                 </div>
             </div>
-
-            <div class="mt-4 flex gap-3">
-                <button id="uploadBtn"
-                    class="bg-cyan-600 px-6 py-2.5 rounded-lg font-semibold hover:bg-cyan-500 transition">Xử lý
-                    file</button>
-            </div>
-
-            <p id="status" class="mt-3 text-sm text-zinc-400">Sẵn sàng xử lý.</p>
+            <p id="status" class="mt-4 text-center text-sm font-semibold text-slate-500">Khu vườn đang lắng nghe...</p>
         </section>
 
-        <section class="mt-6">
-            <h2 class="text-xl font-semibold mb-3 text-zinc-200">Kết quả dịch</h2>
-            <ul id="resultList" class="space-y-3">
-                <li class="p-4 rounded-lg bg-zinc-900 border border-zinc-800 text-zinc-400">Kết quả nhận diện sẽ hiển
-                    thị ở đây.</li>
+        <section>
+            <h2 class="text-2xl font-bold text-[#2f9a5a] mb-5 ml-2">Lời thì thầm được ghi lại:</h2>
+            <ul id="resultList" class="space-y-4">
+                <li class="ghibli-card p-5 rounded-2xl text-slate-500 italic">
+                    Chưa có âm thanh nào được xử lý...
+                </li>
             </ul>
         </section>
     </main>
+
     <script src="script.js"></script>
 </body>
-
 </html>

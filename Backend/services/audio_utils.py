@@ -51,7 +51,7 @@ def load_audio(file_path, target_sr=16000):
         return np.asarray(audio, dtype=np.float32), target_sr
 
 
-def normalize_audio_for_file(audio_data, sample_rate=16000, noise_decrease=0.5):
+def normalize_audio_for_file(audio_data, sample_rate=16000, noise_decrease=0.2):
     audio = np.asarray(audio_data, dtype=np.float32)
     if audio.size == 0:
         return audio

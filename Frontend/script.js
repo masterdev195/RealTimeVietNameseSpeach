@@ -3,57 +3,53 @@ const uploadBtn = document.getElementById('uploadBtn');
 const statusBox = document.getElementById('status');
 const resultList = document.getElementById('resultList');
 
-function formatTime(seconds) {
-    const sec = Math.max(0, Math.floor(seconds));
-    const mm = String(Math.floor(sec / 60)).padStart(2, '0');
-    const ss = String(sec % 60).padStart(2, '0');
-    return `${mm}:${ss}`;
-}
-
 function setStatus(message, isError = false) {
     statusBox.textContent = message;
     statusBox.className = isError
-        ? 'mt-3 text-sm text-red-300'
-        : 'mt-3 text-sm text-emerald-300';
+        ? 'mt-4 text-center text-sm font-semibold text-rose-500'
+        : 'mt-4 text-center text-sm font-semibold text-[#2f9a5a]';
 }
 
 function renderSegments(segments) {
     resultList.innerHTML = '';
 
     if (!segments || segments.length === 0) {
-        resultList.innerHTML = '<li class="p-4 rounded-lg bg-zinc-900 border border-zinc-800 text-zinc-400">Không có nội dung nhận diện.</li>';
+        resultList.innerHTML = '<li class="ghibli-card p-5 rounded-2xl text-slate-500 italic text-center">Không tìm thấy lời thì thầm nào.</li>';
         return;
     }
 
     segments.forEach((item) => {
         const row = document.createElement('li');
-        row.className = 'p-4 rounded-xl bg-zinc-900 border border-zinc-800';
+        // Tạo style giống bong bóng hội thoại mềm mại
+        row.className = 'ghibli-card p-6 rounded-[1.5rem] border-l-8 border-[#ffb9da] transform hover:scale-[1.01] transition-transform';
 
-        const langLabel = item.language && item.language !== 'unknown'
-            ? item.language.toUpperCase()
-            : (item.detected_language || 'AUTO').toUpperCase();
+        const lang = (item.language || 'VN').toUpperCase();
 
         row.innerHTML = `
-            <div class="flex flex-wrap gap-3 items-center mb-2">
-                <span class="px-2.5 py-1 rounded-full bg-emerald-600/20 text-emerald-200 border border-emerald-500/40 text-xs font-semibold">${langLabel}</span>
+            <div class="flex items-center gap-2 mb-2">
+                <span class="bg-[#ffb9da] text-[#c83b7c] text-[10px] px-2 py-0.5 rounded-full font-bold">
+                    ${lang}
+                </span>
+                <span class="text-xs text-slate-400 font-medium">✨ Đã ghi nhận</span>
             </div>
-            <p class="text-zinc-100 leading-relaxed">${item.text}</p>
+            <p class="text-[#2d3748] text-lg leading-relaxed font-medium">${item.text}</p>
         `;
 
         resultList.appendChild(row);
     });
 }
 
+// Logic Fetch API giữ nguyên như bản gốc của bạn[cite: 2]
 uploadBtn.addEventListener('click', async () => {
     const file = fileInput.files[0];
     if (!file) {
-        setStatus('Vui lòng chọn file âm thanh trước.', true);
+        setStatus('Ôi, bạn chưa chọn file âm thanh kìa! ✨', true);
         return;
     }
 
     uploadBtn.disabled = true;
-    uploadBtn.classList.add('opacity-60', 'cursor-not-allowed');
-    setStatus('Đang tải file và xử lý nhận diện...');
+    uploadBtn.classList.add('opacity-50');
+    setStatus('Gió đang mang âm thanh đi xử lý... vui lòng đợi nhé! 🍃');
 
     try {
         const formData = new FormData();
@@ -65,18 +61,14 @@ uploadBtn.addEventListener('click', async () => {
         });
 
         const data = await response.json();
-        if (!response.ok) {
-            throw new Error(data.detail || 'Không thể xử lý file.');
-        }
+        if (!response.ok) throw new Error(data.detail || 'Lỗi xử lý');
 
-        const segments = data.segments || [];
-        renderSegments(segments);
-
-        setStatus(`Hoàn tất: ${data.total_segments || 0} đoạn thoại.`);
+        renderSegments(data.segments);
+        setStatus(`Xong rồi! Khu vườn đã nghe được ${data.total_segments || 0} câu thoại. ✨`);
     } catch (error) {
-        setStatus(`Lỗi: ${error.message}`, true);
+        setStatus(`Có chút trục trặc: ${error.message}`, true);
     } finally {
         uploadBtn.disabled = false;
-        uploadBtn.classList.remove('opacity-60', 'cursor-not-allowed');
+        uploadBtn.classList.remove('opacity-50');
     }
 });
